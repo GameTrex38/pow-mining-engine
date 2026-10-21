@@ -6,6 +6,6 @@ build/
 *.o
 *.a
 *.log
-*.txt
 .vscode/
 .idea/
+!CMakeLists.txt

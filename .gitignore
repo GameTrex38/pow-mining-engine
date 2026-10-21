@@ -1,0 +1,19 @@
+# Build artifacts
+build/
+bin/
+lib/
+*.exe
+*.obj
+*.o
+*.a
+*.log
+*.txt
+!CMakeLists.txt
+!README.md
+!DEPLOYMENT.md
+
+# IDE configurations
+.vscode/
+.idea/
+.vs/
+*.swp
