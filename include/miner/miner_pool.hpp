@@ -21,9 +21,6 @@ struct alignas(64) WorkerSlot {
     std::atomic<double> hashrate_mhs{0.0};
     uint64_t prev_hashes_sample{0};
     std::chrono::steady_clock::time_point last_sample_time;
-    // Cache line padding
-    char padding[64 - sizeof(std::atomic<uint64_t>) - sizeof(std::atomic<uint32_t>) -
-                 sizeof(std::atomic<double>) - sizeof(uint64_t) - sizeof(std::chrono::steady_clock::time_point)];
 };
 
 struct BenchmarkResult {

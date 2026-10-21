@@ -6,6 +6,7 @@
 #include <thread>
 #include <memory>
 #include <functional>
+#include <cstdint>
 
 namespace pow_engine::server {
 

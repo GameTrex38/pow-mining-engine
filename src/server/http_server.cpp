@@ -6,6 +6,8 @@
 #include <sstream>
 #include <vector>
 #include <cstring>
+#include <cstdint>
+#include <cstdlib>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN

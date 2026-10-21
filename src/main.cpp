@@ -7,6 +7,7 @@
 #include <thread>
 #include <csignal>
 #include <iomanip>
+#include <cstdlib>
 
 namespace {
 std::atomic<bool> g_shutdown_requested{false};

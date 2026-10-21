@@ -17,7 +17,7 @@ COPY web/ ./web/
 
 # Configure and compile with full Release optimizations
 RUN cmake -B build -DCMAKE_BUILD_TYPE=Release && \
-    cmake --build build --config Release -j$(nproc) && \
+    cmake --build build --config Release -j2 && \
     ./build/test_pow
 
 # Minimal Debian runtime image

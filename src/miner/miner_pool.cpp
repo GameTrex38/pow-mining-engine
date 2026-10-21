@@ -3,6 +3,7 @@
 #include <sstream>
 #include <iomanip>
 #include <ctime>
+#include <algorithm>
 
 namespace pow_engine::miner {
 

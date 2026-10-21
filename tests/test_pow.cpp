@@ -5,6 +5,7 @@
 #include <cassert>
 #include <string>
 #include <random>
+#include <cstring>
 
 using namespace pow_engine;
 
