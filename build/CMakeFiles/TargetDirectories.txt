@@ -1,0 +1,5 @@
+C:/Users/Admin/.gemini/antigravity/scratch/pow_mining_engine/build/CMakeFiles/pow_core.dir
+C:/Users/Admin/.gemini/antigravity/scratch/pow_mining_engine/build/CMakeFiles/pow_engine.dir
+C:/Users/Admin/.gemini/antigravity/scratch/pow_mining_engine/build/CMakeFiles/test_pow.dir
+C:/Users/Admin/.gemini/antigravity/scratch/pow_mining_engine/build/CMakeFiles/edit_cache.dir
+C:/Users/Admin/.gemini/antigravity/scratch/pow_mining_engine/build/CMakeFiles/rebuild_cache.dir
