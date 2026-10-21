@@ -26,10 +26,12 @@ set(CORE_SOURCES
 add_library(pow_core STATIC ${CORE_SOURCES})
 target_include_directories(pow_core PUBLIC include)
 
+find_package(Threads REQUIRED)
+
 if(WIN32)
     target_link_libraries(pow_core PUBLIC ws2_32)
 else()
-    target_link_libraries(pow_core PUBLIC pthread atomic)
+    target_link_libraries(pow_core PUBLIC Threads::Threads)
 endif()
 
 # Main mining engine executable

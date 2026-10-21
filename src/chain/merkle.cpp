@@ -1,5 +1,6 @@
 #include "chain/merkle.hpp"
 #include <array>
+#include <algorithm>
 
 namespace pow_engine::chain {
 

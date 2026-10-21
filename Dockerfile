@@ -16,9 +16,9 @@ COPY tests/ ./tests/
 COPY web/ ./web/
 
 # Configure and compile with full Release optimizations
-RUN cmake -B build -DCMAKE_BUILD_TYPE=Release && \
-    cmake --build build --config Release -j2 && \
-    ./build/test_pow
+RUN cmake -B build -DCMAKE_BUILD_TYPE=Release
+RUN cmake --build build --config Release -j2 --verbose
+RUN ./build/test_pow
 
 # Minimal Debian runtime image
 FROM debian:bookworm-slim
