@@ -42,6 +42,11 @@ target_link_libraries(pow_engine PRIVATE pow_core)
 add_executable(test_pow tests/test_pow.cpp)
 target_link_libraries(test_pow PRIVATE pow_core)
 
+if(NOT MSVC)
+    target_link_options(pow_engine PRIVATE -static-libstdc++ -static-libgcc)
+    target_link_options(test_pow PRIVATE -static-libstdc++ -static-libgcc)
+endif()
+
 # Copy web dashboard directory to build output
 add_custom_command(TARGET pow_engine POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory

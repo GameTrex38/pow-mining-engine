@@ -34,6 +34,10 @@ COPY --from=builder /app/build/pow_engine /app/pow_engine
 COPY --from=builder /app/build/test_pow /app/test_pow
 COPY --from=builder /app/web /app/web
 
+# Ensure GCC 13 runtime libraries are present and configured in library path
+COPY --from=builder /usr/local/lib64/ /usr/local/lib64/
+ENV LD_LIBRARY_PATH=/usr/local/lib64:${LD_LIBRARY_PATH}
+
 # Support dynamic port binding across Render, Railway, Fly.io, and Cloud Run
 ENV PORT=8080
 EXPOSE 8080
