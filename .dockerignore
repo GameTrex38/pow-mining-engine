@@ -1,0 +1,11 @@
+.git
+.gitignore
+build/
+*.exe
+*.obj
+*.o
+*.a
+*.log
+*.txt
+.vscode/
+.idea/

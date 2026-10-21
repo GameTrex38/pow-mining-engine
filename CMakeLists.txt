@@ -28,6 +28,8 @@ target_include_directories(pow_core PUBLIC include)
 
 if(WIN32)
     target_link_libraries(pow_core PUBLIC ws2_32)
+else()
+    target_link_libraries(pow_core PUBLIC pthread)
 endif()
 
 # Main mining engine executable

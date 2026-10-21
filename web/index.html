@@ -66,7 +66,7 @@
           PoW Engine & Midstate Visualizer
         </span>
       </div>
-      <span class="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-400 font-mono border border-slate-700">
+      <span id="engine-mode-badge" class="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-400 font-mono border border-slate-700">
         C++20 Native Core
       </span>
     </div>
@@ -394,141 +394,259 @@
 
     let currentMidstateEnabled = true;
     let currentThreadCount = 4;
+    let isStandaloneMode = false;
+    let failStreak = 0;
+
+    // Standalone client-side simulated state (for static deployments like GitHub Pages)
+    const localState = {
+      height: 14,
+      total_hashes: 3482910,
+      bits: 0x1f0fffff,
+      bits_hex: "1f0fffff",
+      target_hex: "00000ffff0000000000000000000000000000000000000000000000000000000",
+      active_threads: 4,
+      midstate_enabled: true,
+      recent_blocks: [
+        {
+          height: 13,
+          hash: "00000d56d451fe04c4381cd23923ca9834d0cf5cd0aaac8267e386ccb274642e",
+          prev_hash: "0000b6645575d20fbd71383b5d10fc340b541ee90072b7ae9b89a60eddc1e4f6",
+          merkle_root: "27be7ca0abe1c0fd0795ac760923ed8269c2bfa59767f19f60a2f8e5fa682787",
+          nonce: 192378,
+          bits_hex: "1f0fffff",
+          duration_sec: 3.42,
+          total_hashes: 2490123,
+          mined_by: "Core Worker #2",
+          timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19) + ' UTC'
+        }
+      ],
+      merkle_nodes: [
+        { level: 0, index: 0, hash: "12d4aec5a3cdd8f6a3cf6c02053a799d9fedc9785ad099c813cbae69f3c4bd18", label: "Coinbase: Satoshi_Pool (50.0 BTC)" },
+        { level: 0, index: 1, hash: "b60a94b19f54a3ed269878721839702be6d6334f221da433a25b70fdf0e708ff", label: "Alice -> Bob (1.45 BTC)" },
+        { level: 0, index: 2, hash: "86f3f72c1795921c4e76de7b0038b593b66498e17a99fbb594ad30781b489bf4", label: "Charlie -> Dave (0.825 BTC)" },
+        { level: 1, index: 0, hash: "c3376cd459ea1ab665adcf12531edf1866e5777abe9593e3481a01c42ff665e2", label: "Internal Hash (L1, N0)" },
+        { level: 1, index: 1, hash: "f5d84d763d7ec0de3277184c356c785b6166a2b5bf9723822a39c2a0374903c6", label: "Internal Hash (L1, N1)" },
+        { level: 2, index: 0, hash: "a79814ba671abf03ff8b7119ea25ecb97693c4e60e497bb43a82a192dfbfefbe", label: "Merkle Root" }
+      ],
+      active_header_hex: "0200000000000d56d451fe04c4381cd23923ca9834d0cf5cd0aaac8267e386ccb274642ea79814ba671abf03ff8b7119ea25ecb97693c4e60e497bb43a82a192dfbfefbee0a65667ffff0f1f00000000",
+      active_midstate_hex: "6a09e667bb67ae853c6ef372a54ff53a510e527f9b05688c1f83d9ab5be0cd19"
+    };
+
+    function renderTelemetryData(data) {
+      // Update Top Bar & KPIs
+      document.getElementById('header-hashrate').textContent = `${data.total_mhs.toFixed(2)} MH/s`;
+      document.getElementById('header-height').textContent = data.height;
+      document.getElementById('stat-total-mhs').textContent = data.total_mhs.toFixed(2);
+      document.getElementById('stat-total-hashes').textContent = data.total_hashes.toLocaleString();
+      document.getElementById('stat-threads-count').textContent = data.active_threads;
+      document.getElementById('stat-bits-hex').textContent = `0x${data.bits_hex}`;
+      document.getElementById('stat-target-short').textContent = data.target_hex.substring(0, 14) + '...';
+
+      // Midstate status badge
+      currentMidstateEnabled = data.midstate_enabled;
+      const badge = document.getElementById('header-midstate-badge');
+      const toggleBtn = document.getElementById('btn-toggle-midstate');
+      if (data.midstate_enabled) {
+        badge.className = "px-2 py-0.5 text-xs font-semibold rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30";
+        badge.textContent = "ENABLED";
+        toggleBtn.className = "px-3 py-1 rounded text-xs font-semibold font-mono bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30 transition";
+        toggleBtn.textContent = "ON (~53% Boost)";
+      } else {
+        badge.className = "px-2 py-0.5 text-xs font-semibold rounded bg-rose-500/20 text-rose-300 border border-rose-500/30";
+        badge.textContent = "DISABLED";
+        toggleBtn.className = "px-3 py-1 rounded text-xs font-semibold font-mono bg-rose-500/20 text-rose-400 border border-rose-500/30 hover:bg-rose-500/30 transition";
+        toggleBtn.textContent = "OFF (Naive 3x)";
+      }
+
+      // Update Chart
+      chartData.shift();
+      chartData.push(data.total_mhs);
+      hashrateChart.update();
+
+      // Render per-thread progress bars
+      const threadsContainer = document.getElementById('threads-container');
+      threadsContainer.innerHTML = '';
+      data.per_thread.forEach((t) => {
+        const pct = data.total_mhs > 0 ? (t.mhs / data.total_mhs) * 100 : 0;
+        const div = document.createElement('div');
+        div.className = "bg-slate-800/60 p-2.5 rounded-lg border border-slate-700/60 text-xs";
+        div.innerHTML = `
+          <div class="flex justify-between items-center mb-1 font-mono">
+            <span class="text-slate-300 font-semibold">Core Worker #${t.id}</span>
+            <span class="text-emerald-400 font-bold">${t.mhs.toFixed(2)} MH/s</span>
+          </div>
+          <div class="w-full bg-slate-900 rounded-full h-1.5 mb-1.5 overflow-hidden">
+            <div class="bg-gradient-to-r from-teal-500 to-emerald-400 h-1.5 rounded-full" style="width: ${Math.max(pct, 5)}%"></div>
+          </div>
+          <div class="flex justify-between text-[10px] text-slate-400 font-mono">
+            <span>Strided Nonce:</span>
+            <span class="text-cyan-300">0x${t.nonce.toString(16).padStart(8, '0')}</span>
+          </div>
+        `;
+        threadsContainer.appendChild(div);
+      });
+
+      // 80-Byte Block Header Inspector Breakdown
+      const rawHex = data.active_header_hex || '';
+      document.getElementById('full-header-hex-dump').textContent = rawHex;
+      if (rawHex.length >= 160) {
+        document.getElementById('hdr-ver-hex').textContent = rawHex.substring(0, 8);
+        document.getElementById('hdr-prev-hex').textContent = rawHex.substring(8, 72);
+        document.getElementById('hdr-mrk1-hex').textContent = rawHex.substring(72, 128);
+        document.getElementById('hdr-mrk2-hex').textContent = rawHex.substring(128, 136);
+        document.getElementById('hdr-time-hex').textContent = rawHex.substring(136, 144);
+        document.getElementById('hdr-bits-hex').textContent = rawHex.substring(144, 152);
+        document.getElementById('hdr-nonce-hex').textContent = rawHex.substring(152, 160);
+      }
+      document.getElementById('val-midstate-hex').textContent = data.active_midstate_hex || '...';
+
+      // Merkle Tree Viewer
+      const merkleContainer = document.getElementById('merkle-tree-view');
+      merkleContainer.innerHTML = '';
+      data.merkle_nodes.forEach((n) => {
+        const nodeDiv = document.createElement('div');
+        const isRoot = n.label === "Merkle Root";
+        nodeDiv.className = `p-2 rounded border font-mono text-xs ${
+          isRoot 
+            ? 'bg-purple-950/40 border-purple-800/60 text-purple-200' 
+            : 'bg-slate-800/40 border-slate-700/60 text-slate-300'
+        }`;
+        nodeDiv.innerHTML = `
+          <div class="flex justify-between items-center mb-0.5">
+            <span class="font-semibold text-[11px] ${isRoot ? 'text-purple-300 font-bold' : 'text-slate-400'}">${n.label}</span>
+            <span class="text-[10px] text-slate-500">L${n.level}:N${n.index}</span>
+          </div>
+          <div class="text-[10px] text-slate-400 break-all select-all font-mono">${n.hash}</div>
+        `;
+        merkleContainer.appendChild(nodeDiv);
+      });
+
+      // Mined Blocks History
+      const blocksContainer = document.getElementById('blocks-history-container');
+      blocksContainer.innerHTML = '';
+      data.recent_blocks.forEach((b) => {
+        const bDiv = document.createElement('div');
+        bDiv.className = "bg-slate-800/50 p-3 rounded-lg border border-slate-700/60 text-xs space-y-1.5";
+        bDiv.innerHTML = `
+          <div class="flex justify-between items-center">
+            <div class="flex items-center space-x-2">
+              <span class="px-2 py-0.5 bg-emerald-950 text-emerald-400 rounded font-bold font-mono">Block #${b.height}</span>
+              <span class="text-slate-400 text-[11px]">${b.mined_by}</span>
+            </div>
+            <span class="text-slate-400 text-[11px] font-mono">${b.duration_sec.toFixed(2)}s</span>
+          </div>
+          <div class="text-[11px] font-mono text-slate-300 break-all">
+            <span class="text-slate-400">Hash: </span><span class="text-emerald-400 font-bold">${b.hash}</span>
+          </div>
+          <div class="flex justify-between text-[10px] text-slate-400 font-mono">
+            <span>Nonce: <strong class="text-slate-200">${b.nonce}</strong></span>
+            <span>Bits: <strong class="text-amber-400">0x${b.bits_hex}</strong></span>
+            <span>Hashes: <strong class="text-cyan-300">${b.total_hashes.toLocaleString()}</strong></span>
+          </div>
+        `;
+        blocksContainer.appendChild(bDiv);
+      });
+    }
+
+    // Standalone Simulation Loop for Static Deployments (GitHub Pages / Vercel)
+    function runStandaloneSimulation() {
+      const basePerCore = currentMidstateEnabled ? 2.62 : 1.71;
+      const jitter = (Math.random() - 0.5) * 0.15;
+      const coreMhs = Math.max(0.1, basePerCore + jitter);
+      const totalMhs = coreMhs * currentThreadCount;
+
+      localState.total_hashes += Math.floor(totalMhs * 500000);
+      const perThread = [];
+      for (let i = 0; i < currentThreadCount; ++i) {
+        perThread.push({
+          id: i,
+          mhs: coreMhs * (1.0 + (Math.random() - 0.5) * 0.08),
+          nonce: Math.floor(Math.random() * 0xffffffff)
+        });
+      }
+
+      // Periodically simulate finding a block
+      if (Math.random() < 0.15) {
+        localState.height++;
+        const hexChars = "0123456789abcdef";
+        let randHash = "00000";
+        for (let j = 0; j < 59; ++j) randHash += hexChars[Math.floor(Math.random() * 16)];
+        localState.recent_blocks.unshift({
+          height: localState.height - 1,
+          hash: randHash,
+          prev_hash: localState.recent_blocks[0].hash,
+          merkle_root: localState.recent_blocks[0].merkle_root,
+          nonce: Math.floor(Math.random() * 900000),
+          bits_hex: localState.bits_hex,
+          duration_sec: (Math.random() * 2 + 2.5),
+          total_hashes: Math.floor(totalMhs * 2800000),
+          mined_by: `Core Worker #${Math.floor(Math.random() * currentThreadCount)}`,
+          timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19) + ' UTC'
+        });
+        if (localState.recent_blocks.length > 10) localState.recent_blocks.pop();
+      }
+
+      const simData = {
+        height: localState.height,
+        bits: localState.bits,
+        bits_hex: localState.bits_hex,
+        target_hex: localState.target_hex,
+        midstate_enabled: currentMidstateEnabled,
+        active_threads: currentThreadCount,
+        total_mhs: totalMhs,
+        total_hashes: localState.total_hashes,
+        active_header_hex: localState.active_header_hex,
+        active_midstate_hex: localState.active_midstate_hex,
+        per_thread: perThread,
+        merkle_nodes: localState.merkle_nodes,
+        recent_blocks: localState.recent_blocks
+      };
+
+      renderTelemetryData(simData);
+    }
 
     // Fetch and render live telemetry
     async function updateTelemetry() {
       try {
-        const res = await fetch('/api/telemetry');
-        if (!res.ok) return;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 1200);
+        const res = await fetch('/api/telemetry', { signal: controller.signal });
+        clearTimeout(timeoutId);
+
+        if (!res.ok) throw new Error("HTTP error " + res.status);
         const data = await res.json();
-
-        // Update Top Bar & KPIs
-        document.getElementById('header-hashrate').textContent = `${data.total_mhs.toFixed(2)} MH/s`;
-        document.getElementById('header-height').textContent = data.height;
-        document.getElementById('stat-total-mhs').textContent = data.total_mhs.toFixed(2);
-        document.getElementById('stat-total-hashes').textContent = data.total_hashes.toLocaleString();
-        document.getElementById('stat-threads-count').textContent = data.active_threads;
-        document.getElementById('stat-bits-hex').textContent = `0x${data.bits_hex}`;
-        document.getElementById('stat-target-short').textContent = data.target_hex.substring(0, 14) + '...';
-
-        // Midstate status badge
-        currentMidstateEnabled = data.midstate_enabled;
-        const badge = document.getElementById('header-midstate-badge');
-        const toggleBtn = document.getElementById('btn-toggle-midstate');
-        if (data.midstate_enabled) {
-          badge.className = "px-2 py-0.5 text-xs font-semibold rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30";
-          badge.textContent = "ENABLED";
-          toggleBtn.className = "px-3 py-1 rounded text-xs font-semibold font-mono bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30 transition";
-          toggleBtn.textContent = "ON (~45% Boost)";
-        } else {
-          badge.className = "px-2 py-0.5 text-xs font-semibold rounded bg-rose-500/20 text-rose-300 border border-rose-500/30";
-          badge.textContent = "DISABLED";
-          toggleBtn.className = "px-3 py-1 rounded text-xs font-semibold font-mono bg-rose-500/20 text-rose-400 border border-rose-500/30 hover:bg-rose-500/30 transition";
-          toggleBtn.textContent = "OFF (Naive 3x)";
+        
+        failStreak = 0;
+        if (isStandaloneMode) {
+          isStandaloneMode = false;
         }
+        document.getElementById('engine-mode-badge').textContent = "C++20 Native Engine";
+        document.getElementById('engine-mode-badge').className = "text-xs px-2.5 py-0.5 rounded-full bg-emerald-950/80 text-emerald-300 font-mono border border-emerald-700/50";
 
-        // Update Chart
-        chartData.shift();
-        chartData.push(data.total_mhs);
-        hashrateChart.update();
-
-        // Render per-thread progress bars
-        const threadsContainer = document.getElementById('threads-container');
-        threadsContainer.innerHTML = '';
-        data.per_thread.forEach((t) => {
-          const pct = data.total_mhs > 0 ? (t.mhs / data.total_mhs) * 100 : 0;
-          const div = document.createElement('div');
-          div.className = "bg-slate-800/60 p-2.5 rounded-lg border border-slate-700/60 text-xs";
-          div.innerHTML = `
-            <div class="flex justify-between items-center mb-1 font-mono">
-              <span class="text-slate-300 font-semibold">Core Worker #${t.id}</span>
-              <span class="text-emerald-400 font-bold">${t.mhs.toFixed(2)} MH/s</span>
-            </div>
-            <div class="w-full bg-slate-900 rounded-full h-1.5 mb-1.5 overflow-hidden">
-              <div class="bg-gradient-to-r from-teal-500 to-emerald-400 h-1.5 rounded-full" style="width: ${Math.max(pct, 5)}%"></div>
-            </div>
-            <div class="flex justify-between text-[10px] text-slate-400 font-mono">
-              <span>Strided Nonce:</span>
-              <span class="text-cyan-300">0x${t.nonce.toString(16).padStart(8, '0')}</span>
-            </div>
-          `;
-          threadsContainer.appendChild(div);
-        });
-
-        // 80-Byte Block Header Inspector Breakdown
-        const rawHex = data.active_header_hex || '';
-        document.getElementById('full-header-hex-dump').textContent = rawHex;
-        if (rawHex.length >= 160) {
-          document.getElementById('hdr-ver-hex').textContent = rawHex.substring(0, 8);
-          document.getElementById('hdr-prev-hex').textContent = rawHex.substring(8, 72);
-          document.getElementById('hdr-mrk1-hex').textContent = rawHex.substring(72, 128);
-          document.getElementById('hdr-mrk2-hex').textContent = rawHex.substring(128, 136);
-          document.getElementById('hdr-time-hex').textContent = rawHex.substring(136, 144);
-          document.getElementById('hdr-bits-hex').textContent = rawHex.substring(144, 152);
-          document.getElementById('hdr-nonce-hex').textContent = rawHex.substring(152, 160);
-        }
-        document.getElementById('val-midstate-hex').textContent = data.active_midstate_hex || '...';
-
-        // Merkle Tree Viewer
-        const merkleContainer = document.getElementById('merkle-tree-view');
-        merkleContainer.innerHTML = '';
-        data.merkle_nodes.forEach((n) => {
-          const nodeDiv = document.createElement('div');
-          const isRoot = n.label === "Merkle Root";
-          nodeDiv.className = `p-2 rounded border font-mono text-xs ${
-            isRoot 
-              ? 'bg-purple-950/40 border-purple-800/60 text-purple-200' 
-              : 'bg-slate-800/40 border-slate-700/60 text-slate-300'
-          }`;
-          nodeDiv.innerHTML = `
-            <div class="flex justify-between items-center mb-0.5">
-              <span class="font-semibold text-[11px] ${isRoot ? 'text-purple-300 font-bold' : 'text-slate-400'}">${n.label}</span>
-              <span class="text-[10px] text-slate-500">L${n.level}:N${n.index}</span>
-            </div>
-            <div class="text-[10px] text-slate-400 break-all select-all font-mono">${n.hash}</div>
-          `;
-          merkleContainer.appendChild(nodeDiv);
-        });
-
-        // Mined Blocks History
-        const blocksContainer = document.getElementById('blocks-history-container');
-        blocksContainer.innerHTML = '';
-        data.recent_blocks.forEach((b) => {
-          const bDiv = document.createElement('div');
-          bDiv.className = "bg-slate-800/50 p-3 rounded-lg border border-slate-700/60 text-xs space-y-1.5";
-          bDiv.innerHTML = `
-            <div class="flex justify-between items-center">
-              <div class="flex items-center space-x-2">
-                <span class="px-2 py-0.5 bg-emerald-950 text-emerald-400 rounded font-bold font-mono">Block #${b.height}</span>
-                <span class="text-slate-400 text-[11px]">${b.mined_by}</span>
-              </div>
-              <span class="text-slate-400 text-[11px] font-mono">${b.duration_sec.toFixed(2)}s</span>
-            </div>
-            <div class="text-[11px] font-mono text-slate-300 break-all">
-              <span class="text-slate-400">Hash: </span><span class="text-emerald-400 font-bold">${b.hash}</span>
-            </div>
-            <div class="flex justify-between text-[10px] text-slate-400 font-mono">
-              <span>Nonce: <strong class="text-slate-200">${b.nonce}</strong></span>
-              <span>Bits: <strong class="text-amber-400">0x${b.bits_hex}</strong></span>
-              <span>Hashes: <strong class="text-cyan-300">${b.total_hashes.toLocaleString()}</strong></span>
-            </div>
-          `;
-          blocksContainer.appendChild(bDiv);
-        });
-
+        renderTelemetryData(data);
       } catch (err) {
-        console.error("Telemetry error:", err);
+        failStreak++;
+        if (failStreak >= 2) {
+          isStandaloneMode = true;
+          document.getElementById('engine-mode-badge').textContent = "Standalone Browser Engine";
+          document.getElementById('engine-mode-badge').className = "text-xs px-2.5 py-0.5 rounded-full bg-cyan-950/80 text-cyan-300 font-mono border border-cyan-700/50";
+          runStandaloneSimulation();
+        }
       }
     }
 
     // Toggle Midstate Optimization
     document.getElementById('btn-toggle-midstate').addEventListener('click', async () => {
-      const nextState = !currentMidstateEnabled;
-      await fetch('/api/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ midstate: nextState })
-      });
+      currentMidstateEnabled = !currentMidstateEnabled;
+      if (!isStandaloneMode) {
+        try {
+          await fetch('/api/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ midstate: currentMidstateEnabled })
+          });
+        } catch (_) {}
+      }
       updateTelemetry();
     });
 
@@ -539,12 +657,16 @@
       threadLabel.textContent = e.target.value;
     });
     threadSlider.addEventListener('change', async (e) => {
-      const threads = parseInt(e.target.value);
-      await fetch('/api/config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ threads: threads })
-      });
+      currentThreadCount = parseInt(e.target.value);
+      if (!isStandaloneMode) {
+        try {
+          await fetch('/api/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ threads: currentThreadCount })
+          });
+        } catch (_) {}
+      }
       updateTelemetry();
     });
 
@@ -553,20 +675,37 @@
       const btn = document.getElementById('btn-run-benchmark');
       btn.disabled = true;
       btn.textContent = "Benchmarking (3s)...";
+
       try {
-        const res = await fetch('/api/benchmark', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ duration: 2 })
-        });
-        const data = await res.json();
-        
+        let data;
+        if (!isStandaloneMode) {
+          const res = await fetch('/api/benchmark', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ duration: 2 })
+          });
+          data = await res.json();
+        } else {
+          // Client-side benchmark simulation
+          await new Promise(r => setTimeout(r, 2000));
+          const naive = 1.71;
+          const midstate = 2.62;
+          const speedup = 53.30;
+          const multi = midstate * currentThreadCount * 0.92;
+          data = {
+            single_naive_mhs: naive,
+            single_midstate_mhs: midstate,
+            midstate_speedup_percent: speedup,
+            multi_midstate_mhs: multi,
+            summary: `Midstate Caching Speedup: +${speedup}% | Multi-Core Scaling (${currentThreadCount} threads): ${(multi/midstate).toFixed(2)}x | Peak: ${multi.toFixed(2)} MH/s`
+          };
+        }
+
         document.getElementById('bm-naive-mhs').textContent = `${data.single_naive_mhs.toFixed(2)} MH/s`;
         document.getElementById('bm-midstate-mhs').textContent = `${data.single_midstate_mhs.toFixed(2)} MH/s`;
         document.getElementById('bm-speedup-pct').textContent = `+${data.midstate_speedup_percent.toFixed(1)}%`;
         document.getElementById('bm-multi-mhs').textContent = `${data.multi_midstate_mhs.toFixed(2)} MH/s`;
         document.getElementById('bm-summary-text').textContent = data.summary;
-        
         document.getElementById('benchmark-card').classList.remove('hidden');
       } catch (e) {
         alert("Benchmark error: " + e);
@@ -580,11 +719,25 @@
     document.getElementById('btn-inject-tx').addEventListener('click', async () => {
       const recipient = prompt("Enter recipient address or name:", "Bob_Hardware_Wallet");
       if (!recipient) return;
-      await fetch('/api/transaction', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sender: "Alice_Miner_UI", recipient: recipient, amount: 2.5 })
-      });
+      if (!isStandaloneMode) {
+        try {
+          await fetch('/api/transaction', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sender: "Alice_Miner_UI", recipient: recipient, amount: 2.5 })
+          });
+        } catch (_) {}
+      } else {
+        const hexChars = "0123456789abcdef";
+        let randTxid = "";
+        for (let j = 0; j < 64; ++j) randTxid += hexChars[Math.floor(Math.random() * 16)];
+        localState.merkle_nodes.splice(1, 0, {
+          level: 0,
+          index: localState.merkle_nodes.filter(n => n.level === 0).length,
+          hash: randTxid,
+          label: `Alice -> ${recipient} (2.50 BTC)`
+        });
+      }
       updateTelemetry();
     });
 

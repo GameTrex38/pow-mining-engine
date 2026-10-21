@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: pow-mining-engine
+    runtime: docker
+    plan: free
+    region: oregon
+    envVars:
+      - key: PORT
+        value: 10000

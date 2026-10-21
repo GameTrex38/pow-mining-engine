@@ -22,6 +22,14 @@ int main(int argc, char* argv[]) {
 
     size_t thread_count = 0; // 0 = auto-detect hardware cores
     int port = 8080;
+
+    // Check for cloud environment variable $PORT (used by Render, Railway, Cloud Run, Heroku)
+    if (const char* env_p = std::getenv("PORT")) {
+        try {
+            port = std::stoi(env_p);
+        } catch (...) {}
+    }
+
     bool cli_only = false;
     bool initial_midstate = true;
     bool run_bench_and_exit = false;
