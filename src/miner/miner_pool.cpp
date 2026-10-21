@@ -4,6 +4,8 @@
 #include <iomanip>
 #include <ctime>
 #include <algorithm>
+#include <cstring>
+#include <array>
 
 namespace pow_engine::miner {
 
@@ -180,7 +182,7 @@ void MinerPool::worker_loop(size_t thread_id, [[maybe_unused]] size_t total_work
     header_copy.get_chunks(c1, c2);
     std::memcpy(chunk2_prefix, c2.data(), 12);
 
-    uint32_t chunk2_w[3];
+    std::array<uint32_t, 3> chunk2_w{};
     for (int i = 0; i < 3; ++i) {
         chunk2_w[i] = (static_cast<uint32_t>(chunk2_prefix[i * 4 + 0]) << 24) |
                       (static_cast<uint32_t>(chunk2_prefix[i * 4 + 1]) << 16) |
@@ -196,9 +198,9 @@ void MinerPool::worker_loop(size_t thread_id, [[maybe_unused]] size_t total_work
 
     while (!stop_current_block_ && !block_found_ && running_) {
         if (midstate_mode) {
-            crypto::sha256d_midstate_fast(midstate_copy, chunk2_w, nonce, candidate_hash);
+            crypto::sha256d_midstate_fast(midstate_copy, chunk2_w.data(), nonce, candidate_hash);
         } else {
-            *reinterpret_cast<uint32_t*>(raw_header_naive.data() + 76) = nonce;
+            std::memcpy(raw_header_naive.data() + 76, &nonce, sizeof(uint32_t));
             candidate_hash = crypto::sha256d(raw_header_naive);
         }
 
@@ -261,7 +263,7 @@ void MinerPool::coordinator_loop() {
                     uint64_t diff = current_h - telemetry_slots_[i]->prev_hashes_sample;
                     telemetry_slots_[i]->prev_hashes_sample = current_h;
                     double rate = (static_cast<double>(diff) / dt) / 1'000'000.0;
-                    telemetry_slots_[i]->hashrate_mhs.store(rate, std::memory_order_relaxed);
+                    telemetry_slots_[i]->hashrate_micro_mhs.store(static_cast<uint64_t>(rate * 1000.0), std::memory_order_relaxed);
                 }
             }
         }
@@ -348,7 +350,7 @@ MiningPoolTelemetry MinerPool::get_telemetry() {
     t.per_thread_nonces.resize(t.active_threads, 0);
 
     for (size_t i = 0; i < t.active_threads; ++i) {
-        double mhs = telemetry_slots_[i]->hashrate_mhs.load(std::memory_order_relaxed);
+        double mhs = static_cast<double>(telemetry_slots_[i]->hashrate_micro_mhs.load(std::memory_order_relaxed)) / 1000.0;
         t.per_thread_mhs[i] = mhs;
         t.total_hashrate_mhs += mhs;
         t.per_thread_nonces[i] = telemetry_slots_[i]->current_nonce.load(std::memory_order_relaxed);
@@ -384,7 +386,7 @@ BenchmarkResult MinerPool::run_benchmark(int duration_sec) {
     auto midstate = crypto::compute_midstate(c1.data());
     uint8_t chunk2_prefix[12];
     std::memcpy(chunk2_prefix, c2.data(), 12);
-    uint32_t chunk2_w[3];
+    std::array<uint32_t, 3> chunk2_w{};
     for (int i = 0; i < 3; ++i) {
         chunk2_w[i] = (static_cast<uint32_t>(chunk2_prefix[i * 4 + 0]) << 24) |
                       (static_cast<uint32_t>(chunk2_prefix[i * 4 + 1]) << 16) |
@@ -400,7 +402,8 @@ BenchmarkResult MinerPool::run_benchmark(int duration_sec) {
         crypto::Hash256 h;
         auto start = std::chrono::high_resolution_clock::now();
         for (uint64_t i = 0; i < N; ++i) {
-            *reinterpret_cast<uint32_t*>(raw_bytes.data() + 76) = static_cast<uint32_t>(i);
+            uint32_t n = static_cast<uint32_t>(i);
+            std::memcpy(raw_bytes.data() + 76, &n, sizeof(uint32_t));
             h = crypto::sha256d(raw_bytes);
         }
         auto end = std::chrono::high_resolution_clock::now();
@@ -413,7 +416,7 @@ BenchmarkResult MinerPool::run_benchmark(int duration_sec) {
         crypto::Hash256 h;
         auto start = std::chrono::high_resolution_clock::now();
         for (uint64_t i = 0; i < N; ++i) {
-            crypto::sha256d_midstate_fast(midstate, chunk2_w, static_cast<uint32_t>(i), h);
+            crypto::sha256d_midstate_fast(midstate, chunk2_w.data(), static_cast<uint32_t>(i), h);
         }
         auto end = std::chrono::high_resolution_clock::now();
         double dt = std::chrono::duration<double>(end - start).count();
@@ -427,11 +430,11 @@ BenchmarkResult MinerPool::run_benchmark(int duration_sec) {
         auto start = std::chrono::high_resolution_clock::now();
 
         for (size_t t = 0; t < res.thread_count; ++t) {
-            threads.emplace_back([=, &midstate, &chunk2_w]() {
+            threads.emplace_back([t, n_per_thread, &midstate, &chunk2_w]() {
                 crypto::Hash256 h;
                 const uint32_t start_nonce = static_cast<uint32_t>(t * n_per_thread);
                 for (uint64_t i = 0; i < n_per_thread; ++i) {
-                    crypto::sha256d_midstate_fast(midstate, chunk2_w, start_nonce + static_cast<uint32_t>(i), h);
+                    crypto::sha256d_midstate_fast(midstate, chunk2_w.data(), start_nonce + static_cast<uint32_t>(i), h);
                 }
             });
         }

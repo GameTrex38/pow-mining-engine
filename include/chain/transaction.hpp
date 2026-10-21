@@ -17,7 +17,7 @@ struct Transaction {
     uint32_t extra_nonce{0};
 
     // Computes deterministic 32-byte SHA256d hash of the transaction data
-    [[nodiscard]] crypto::Hash256 compute_hash() const noexcept {
+    [[nodiscard]] crypto::Hash256 compute_hash() const {
         std::string raw;
         if (is_coinbase) {
             raw = "COINBASE:" + recipient + ":" + std::to_string(amount) + ":" + std::to_string(extra_nonce);

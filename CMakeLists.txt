@@ -9,7 +9,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 if(MSVC)
     add_compile_options(/O2 /W4 /permissive- /utf-8)
 else()
-    add_compile_options(-O3 -Wall -Wextra -Wpedantic)
+    add_compile_options(-O3 -Wall)
 endif()
 
 include_directories(include)

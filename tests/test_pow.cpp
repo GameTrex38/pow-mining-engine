@@ -6,6 +6,8 @@
 #include <string>
 #include <random>
 #include <cstring>
+#include <array>
+#include <iomanip>
 
 using namespace pow_engine;
 

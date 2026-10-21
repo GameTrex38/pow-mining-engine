@@ -8,6 +8,7 @@
 #include <cstring>
 #include <cstdint>
 #include <cstdlib>
+#include <iomanip>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN

@@ -15,9 +15,9 @@ COPY src/ ./src/
 COPY tests/ ./tests/
 COPY web/ ./web/
 
-# Configure and compile with full Release optimizations
+# Configure and compile with full Release optimizations (single-job -j1 to ensure zero OOM on cloud free tiers)
 RUN cmake -B build -DCMAKE_BUILD_TYPE=Release
-RUN cmake --build build --config Release -j2 --verbose
+RUN cmake --build build --config Release -j1 --verbose
 RUN ./build/test_pow
 
 # Minimal Debian runtime image

@@ -18,7 +18,7 @@ namespace pow_engine::miner {
 struct alignas(64) WorkerSlot {
     std::atomic<uint64_t> hashes_computed{0};
     std::atomic<uint32_t> current_nonce{0};
-    std::atomic<double> hashrate_mhs{0.0};
+    std::atomic<uint64_t> hashrate_micro_mhs{0}; // rate * 1000 for lock-free 64-bit integer atomics
     uint64_t prev_hashes_sample{0};
     std::chrono::steady_clock::time_point last_sample_time;
 };
